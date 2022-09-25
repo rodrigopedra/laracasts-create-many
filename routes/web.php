@@ -1,11 +1,13 @@
 <?php
 
 use App\Models\Invoice;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Validation\Rule;
 
 Route::get('/', function () {
     $invoice = Invoice::query()
-        ->with('details')
+        ->with('items')
         ->firstOrCreate();
 
     // hard-coded for simplicity
@@ -21,18 +23,39 @@ Route::get('/', function () {
     ]);
 });
 
-Route::post('/details', function (\Illuminate\Http\Request $request) {
-    /** @var \App\Models\Invoice $invoice */
-    $invoice = Invoice::query()->firstOrCreate();
-
+Route::post('/items/{invoice}', function (Request $request, Invoice $invoice) {
     $validated = $request->validate([
-        'items' => ['array', 'required'],
+        'items' => ['array'],
+        'items.*.id' => [
+            'nullable',
+            Rule::exists('invoice_details', 'id')
+                ->where('invoice_id', $invoice->getKey()),
+        ],
         'items.*.service' => ['required'],
         'items.*.amount' => ['required'],
         'items.*.description' => ['required'],
+        'remove' => ['array'],
+        'remove.*' => [
+            'required',
+            Rule::exists('invoice_details', 'id')
+                ->where('invoice_id', $invoice->getKey()),
+        ],
     ]);
 
-    $invoice->details()->createMany($validated['items']);
+    [$newItems, $oldItems] = collect($validated['items'] ?? [])
+        ->map(function ($item) use ($invoice) {
+            $item['invoice_id'] = $invoice->getKey();
+
+            return $item;
+        })
+        ->partition(fn ($item) => blank($item['id'] ?? null));
+
+    $invoice->items()->createMany($newItems);
+    $invoice->items()->upsert($oldItems->all(), ['id'], ['service', 'amount', 'description']);
+
+    if (array_key_exists('remove', $validated)) {
+        $invoice->items()->whereKey($validated['remove'])->delete();
+    }
 
     return back()->with('success', 'saved');
 });

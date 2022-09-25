@@ -10,6 +10,7 @@ class InvoiceDetail extends Model
     use HasFactory;
 
     protected $fillable = [
+        'invoice_id',
         'service',
         'amount',
         'description',
