@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\Invoice;
+use App\Models\InvoiceDetail;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\Rule;
@@ -18,6 +20,29 @@ Route::get('/', function () {
     ];
 
     return view('welcome', [
+        'invoice' => $invoice,
+        'services' => $services,
+    ]);
+});
+
+Route::get('/alternative', function () {
+    $invoice = Invoice::query()
+        ->with('items')
+        ->firstOrCreate();
+
+    if ($invoice->items->isEmpty()) {
+        // the JS code expects at list one item to be present
+        $invoice->setRelation('items', Collection::make([new InvoiceDetail()]));
+    }
+
+    // hard-coded for simplicity
+    $services = [
+        (object) ['service_name' => 'First', 'amount' => 10],
+        (object) ['service_name' => 'Second', 'amount' => 20],
+        (object) ['service_name' => 'Third', 'amount' => 30],
+    ];
+
+    return view('alternative', [
         'invoice' => $invoice,
         'services' => $services,
     ]);
